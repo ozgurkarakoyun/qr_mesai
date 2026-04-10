@@ -47,6 +47,23 @@ def init_db():
                 FOREIGN KEY (personel_id) REFERENCES personel(id)
             );
         """)
+
+        # Otomatik migration — eski DB'lere eksik kolonları ekle
+        mevcut = [r[1] for r in conn.execute("PRAGMA table_info(yoklama)").fetchall()]
+        eksik_kolonlar = {
+            "giris_uyari":  "ALTER TABLE yoklama ADD COLUMN giris_uyari  INTEGER DEFAULT 0",
+            "cikis_uyari":  "ALTER TABLE yoklama ADD COLUMN cikis_uyari  INTEGER DEFAULT 0",
+            "giris_lat":    "ALTER TABLE yoklama ADD COLUMN giris_lat     REAL",
+            "giris_lng":    "ALTER TABLE yoklama ADD COLUMN giris_lng     REAL",
+            "cikis_lat":    "ALTER TABLE yoklama ADD COLUMN cikis_lat     REAL",
+            "cikis_lng":    "ALTER TABLE yoklama ADD COLUMN cikis_lng     REAL",
+            "cikis_disari": "ALTER TABLE yoklama ADD COLUMN cikis_disari  INTEGER DEFAULT 0",
+        }
+        for kolon, sql in eksik_kolonlar.items():
+            if kolon not in mevcut:
+                conn.execute(sql)
+        conn.commit()
+
         # Varsayılan admin personeli ekle (PIN: 1234)
         existing = conn.execute("SELECT COUNT(*) FROM personel").fetchone()[0]
         if existing == 0:
