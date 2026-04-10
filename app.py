@@ -322,25 +322,33 @@ def api_cikis():
 
 ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "admin123")
 
-def admin_url_kontrol(sifre):
-    return sifre == ADMIN_PASS
-
-# Admin paneli — şifre URL'de
-@app.route("/admin/<sifre>")
-def admin_panel(sifre):
-    if not admin_url_kontrol(sifre):
-        return "<h2>Erişim Reddedildi</h2>", 403
-    return render_template("admin_panel.html", admin_sifre=sifre)
-
-# Eski /admin route — yönlendirme sayfası
 @app.route("/admin")
 def admin_login_page():
+    if session.get("admin"):
+        return redirect(url_for("admin_panel"))
     return render_template("admin_login.html")
+
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    if request.form.get("sifre") == ADMIN_PASS:
+        session["admin"] = True
+        return redirect(url_for("admin_panel"))
+    return render_template("admin_login.html", hata="Hatalı şifre!")
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.clear()
+    return redirect(url_for("admin_login_page"))
+
+@app.route("/admin/panel")
+def admin_panel():
+    if not session.get("admin"):
+        return redirect(url_for("admin_login_page"))
+    return render_template("admin_panel.html")
 
 @app.route("/api/admin/personeller")
 def api_personeller():
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
     with get_db() as conn:
         rows = conn.execute("SELECT id, ad_soyad, aktif, olusturma_tarihi FROM personel ORDER BY ad_soyad").fetchall()
@@ -348,8 +356,7 @@ def api_personeller():
 
 @app.route("/api/admin/personel_ekle", methods=["POST"])
 def api_personel_ekle():
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
     data = request.get_json()
     ad   = data.get("ad_soyad", "").strip()
@@ -368,8 +375,7 @@ def api_personel_ekle():
 
 @app.route("/api/admin/personel_sil/<int:pid>", methods=["POST"])
 def api_personel_sil(pid):
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
     with get_db() as conn:
         conn.execute("UPDATE personel SET aktif = 0 WHERE id = ?", (pid,))
@@ -378,10 +384,9 @@ def api_personel_sil(pid):
 
 @app.route("/api/admin/pin_degistir/<int:pid>", methods=["POST"])
 def api_pin_degistir(pid):
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
-    data     = request.get_json()
+    data    = request.get_json()
     yeni_pin = data.get("pin", "").strip()
     if len(yeni_pin) < 4:
         return jsonify({"ok": False, "mesaj": "PIN en az 4 haneli olmalıdır."})
@@ -392,8 +397,7 @@ def api_pin_degistir(pid):
 
 @app.route("/api/admin/yoklamalar")
 def api_yoklamalar():
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
     baslangic = request.args.get("baslangic", date.today().strftime("%Y-%m-%d"))
     bitis     = request.args.get("bitis",     date.today().strftime("%Y-%m-%d"))
@@ -401,7 +405,7 @@ def api_yoklamalar():
         rows = conn.execute("""
             SELECT y.tarih, p.ad_soyad,
                    y.giris_saati, y.cikis_saati,
-                   y.giris_uyari, y.cikis_uyari, y.cikis_disari
+                   y.giris_uyari, y.cikis_uyari
             FROM yoklama y
             JOIN personel p ON p.id = y.personel_id
             WHERE y.tarih BETWEEN ? AND ?
@@ -411,8 +415,7 @@ def api_yoklamalar():
 
 @app.route("/api/admin/qr_urls")
 def api_qr_urls():
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
     base = request.host_url.rstrip("/")
     return jsonify({
@@ -422,8 +425,7 @@ def api_qr_urls():
 
 @app.route("/api/admin/konum_ayar")
 def api_konum_ayar_get():
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
     return jsonify({
         "lat": KLINIK_LAT,
@@ -433,8 +435,7 @@ def api_konum_ayar_get():
 
 @app.route("/api/admin/konum_ayar", methods=["POST"])
 def api_konum_ayar_set():
-    sifre = request.args.get("s", "")
-    if not admin_url_kontrol(sifre):
+    if not session.get("admin"):
         return jsonify({"hata": "Yetkisiz"}), 401
     global KLINIK_LAT, KLINIK_LNG, KLINIK_YARICAP_M
     data = request.get_json()
