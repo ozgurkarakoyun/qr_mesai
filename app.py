@@ -43,6 +43,7 @@ def init_db():
                 giris_lng     REAL,
                 cikis_lat     REAL,
                 cikis_lng     REAL,
+                cikis_disari  INTEGER DEFAULT 0,
                 FOREIGN KEY (personel_id) REFERENCES personel(id)
             );
         """)
@@ -246,13 +247,7 @@ def api_cikis():
         return jsonify({"ok": False, "mesaj": "Geçersiz konum verisi.", "konum_hatasi": True})
 
     iceride, mesafe = konum_dogrula(lat, lng)
-    if not iceride:
-        return jsonify({
-            "ok": False,
-            "mesaj": f"🚫 Kliniğe çok uzaktasınız ({mesafe} m). Çıkış yalnızca klinik içinden yapılabilir.",
-            "konum_hatasi": True,
-            "mesafe": mesafe
-        })
+    cikis_disari = 0 if iceride else 1
     # -----------------------
 
     personel = get_personel_by_pin(pin)
@@ -279,8 +274,8 @@ def api_cikis():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     with get_db() as conn:
         conn.execute(
-            "UPDATE yoklama SET cikis_saati = ?, cikis_ip = ?, cikis_uyari = ?, cikis_lat = ?, cikis_lng = ? WHERE id = ?",
-            (saat, ip, 1 if uyari else 0, lat, lng, yoklama["id"])
+            "UPDATE yoklama SET cikis_saati = ?, cikis_ip = ?, cikis_uyari = ?, cikis_lat = ?, cikis_lng = ?, cikis_disari = ? WHERE id = ?",
+            (saat, ip, 1 if (uyari or cikis_disari) else 0, lat, lng, cikis_disari, yoklama["id"])
         )
         conn.commit()
 
@@ -289,6 +284,15 @@ def api_cikis():
     cikis_dt  = datetime.strptime(f"{tarih} {saat}", "%Y-%m-%d %H:%M:%S")
     sure_dk   = int((cikis_dt - giris_dt).total_seconds() / 60)
     sure_text = f"{sure_dk // 60} saat {sure_dk % 60} dakika"
+
+    # Klinik dışı çıkış uyarısı
+    if cikis_disari:
+        uyari = True
+        konum_uyari = f"⚠️ Klinik dışında çıkış yapıldı ({mesafe} m uzakta). Kayıt 'erken/dışarıda çıkış' olarak işaretlendi."
+        if uyari_mesaj:
+            uyari_mesaj = konum_uyari + " | " + uyari_mesaj
+        else:
+            uyari_mesaj = konum_uyari
 
     return jsonify({
         "ok": True,
