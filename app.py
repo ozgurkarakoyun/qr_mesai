@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify, render_template, session, redirect, u
 from datetime import datetime, date
 import sqlite3
 import hashlib
-import hmac
 import os
 import pytz
 
@@ -323,22 +322,13 @@ def api_cikis():
 
 ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "admin123")
 
-def admin_token():
-    """Sabit HMAC token — şifre + secret_key ile üretilir."""
-    return hmac.new(
-        app.secret_key.encode(),
-        ADMIN_PASS.encode(),
-        "sha256"
-    ).hexdigest()[:32]
-
-def token_gecerli():
-    """Cookie veya query param'dan token doğrula."""
-    tok = request.cookies.get("admin_tok") or request.args.get("tok")
-    return tok and hmac.compare_digest(tok, admin_token())
+def admin_giris_kontrol():
+    """Her istekte şifreyi cookie'den doğrula."""
+    return request.cookies.get("ap") == hashlib.sha256(ADMIN_PASS.encode()).hexdigest()
 
 @app.route("/admin")
 def admin_login_page():
-    if token_gecerli():
+    if admin_giris_kontrol():
         return redirect(url_for("admin_panel"))
     return render_template("admin_login.html")
 
@@ -346,14 +336,13 @@ def admin_login_page():
 def admin_login():
     sifre = request.form.get("sifre", "").strip()
     if sifre == ADMIN_PASS:
-        tok = admin_token()
         resp = redirect(url_for("admin_panel"))
         resp.set_cookie(
-            "admin_tok", tok,
-            max_age=60*60*12,   # 12 saat
+            "ap",
+            hashlib.sha256(ADMIN_PASS.encode()).hexdigest(),
+            max_age=60 * 60 * 24,  # 24 saat
             httponly=True,
-            samesite="Lax",
-            secure=False        # Railway HTTPS'de True yapılabilir
+            samesite="Lax"
         )
         return resp
     return render_template("admin_login.html", hata="Hatalı şifre!")
@@ -361,18 +350,18 @@ def admin_login():
 @app.route("/admin/logout")
 def admin_logout():
     resp = redirect(url_for("admin_login_page"))
-    resp.delete_cookie("admin_tok")
+    resp.delete_cookie("ap")
     return resp
 
 @app.route("/admin/panel")
 def admin_panel():
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return redirect(url_for("admin_login_page"))
     return render_template("admin_panel.html")
 
 @app.route("/api/admin/personeller")
 def api_personeller():
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
     with get_db() as conn:
         rows = conn.execute("SELECT id, ad_soyad, aktif, olusturma_tarihi FROM personel ORDER BY ad_soyad").fetchall()
@@ -380,7 +369,7 @@ def api_personeller():
 
 @app.route("/api/admin/personel_ekle", methods=["POST"])
 def api_personel_ekle():
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
     data = request.get_json()
     ad   = data.get("ad_soyad", "").strip()
@@ -399,7 +388,7 @@ def api_personel_ekle():
 
 @app.route("/api/admin/personel_sil/<int:pid>", methods=["POST"])
 def api_personel_sil(pid):
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
     with get_db() as conn:
         conn.execute("UPDATE personel SET aktif = 0 WHERE id = ?", (pid,))
@@ -408,9 +397,9 @@ def api_personel_sil(pid):
 
 @app.route("/api/admin/pin_degistir/<int:pid>", methods=["POST"])
 def api_pin_degistir(pid):
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
-    data    = request.get_json()
+    data     = request.get_json()
     yeni_pin = data.get("pin", "").strip()
     if len(yeni_pin) < 4:
         return jsonify({"ok": False, "mesaj": "PIN en az 4 haneli olmalıdır."})
@@ -421,7 +410,7 @@ def api_pin_degistir(pid):
 
 @app.route("/api/admin/yoklamalar")
 def api_yoklamalar():
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
     baslangic = request.args.get("baslangic", date.today().strftime("%Y-%m-%d"))
     bitis     = request.args.get("bitis",     date.today().strftime("%Y-%m-%d"))
@@ -429,7 +418,7 @@ def api_yoklamalar():
         rows = conn.execute("""
             SELECT y.tarih, p.ad_soyad,
                    y.giris_saati, y.cikis_saati,
-                   y.giris_uyari, y.cikis_uyari
+                   y.giris_uyari, y.cikis_uyari, y.cikis_disari
             FROM yoklama y
             JOIN personel p ON p.id = y.personel_id
             WHERE y.tarih BETWEEN ? AND ?
@@ -439,7 +428,7 @@ def api_yoklamalar():
 
 @app.route("/api/admin/qr_urls")
 def api_qr_urls():
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
     base = request.host_url.rstrip("/")
     return jsonify({
@@ -449,7 +438,7 @@ def api_qr_urls():
 
 @app.route("/api/admin/konum_ayar")
 def api_konum_ayar_get():
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
     return jsonify({
         "lat": KLINIK_LAT,
@@ -459,7 +448,7 @@ def api_konum_ayar_get():
 
 @app.route("/api/admin/konum_ayar", methods=["POST"])
 def api_konum_ayar_set():
-    if not token_gecerli():
+    if not admin_giris_kontrol():
         return jsonify({"hata": "Yetkisiz"}), 401
     global KLINIK_LAT, KLINIK_LNG, KLINIK_YARICAP_M
     data = request.get_json()
