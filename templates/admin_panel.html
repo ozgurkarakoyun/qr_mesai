@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Paneli - QR Yoklama</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:    #0f172a;
+    --card:  #1e293b;
+    --brd:   #334155;
+    --text:  #f1f5f9;
+    --muted: #94a3b8;
+    --green: #22c55e;
+    --red:   #ef4444;
+    --blue:  #3b82f6;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  /* Nav */
+  nav {
+    background: var(--card);
+    border-bottom: 1px solid var(--brd);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  nav h1 { font-size: 18px; }
+  nav a  { color: var(--muted); text-decoration: none; font-size: 14px; }
+  nav a:hover { color: var(--red); }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 20px 24px 0;
+    border-bottom: 1px solid var(--brd);
+  }
+  .tab {
+    padding: 10px 20px;
+    border-radius: 10px 10px 0 0;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); background: rgba(59,130,246,0.08); }
+
+  /* Content */
+  .pane { display: none; padding: 24px; max-width: 900px; }
+  .pane.active { display: block; }
+
+  /* Card */
+  .box {
+    background: var(--card);
+    border: 1px solid var(--brd);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .box h2 { font-size: 16px; margin-bottom: 16px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 12px; }
+
+  /* Form row */
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  input[type=text], input[type=password], input[type=date] {
+    background: var(--bg);
+    border: 1px solid var(--brd);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    flex: 1;
+    min-width: 140px;
+  }
+  input:focus { border-color: var(--blue); }
+
+  /* Buttons */
+  .btn { padding: 10px 18px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn-blue  { background: var(--blue); color: #fff; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-red   { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+  .btn-sm    { padding: 6px 12px; font-size: 12px; }
+  .btn:hover { opacity: .85; }
+
+  /* Table */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--brd); }
+  td { padding: 12px; border-bottom: 1px solid rgba(51,65,85,0.5); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-green { background: rgba(34,197,94,0.15); color: #86efac; }
+  .badge-red   { background: rgba(239,68,68,0.15);  color: #fca5a5; }
+  .badge-yellow{ background: rgba(234,179,8,0.15);  color: #fde047; }
+
+  /* QR section */
+  .qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 500px) { .qr-grid { grid-template-columns: 1fr; } }
+  .qr-card {
+    background: var(--bg);
+    border: 1px solid var(--brd);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  .qr-card h3 { margin-bottom: 12px; font-size: 15px; }
+  .qr-card img { width: 180px; height: 180px; border-radius: 8px; background: white; }
+  .qr-url { font-size: 11px; color: var(--muted); word-break: break-all; margin-top: 10px; }
+  .qr-card .btn { margin-top: 10px; width: 100%; }
+
+  .msg { padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-top: 10px; }
+  .msg-ok  { background: rgba(34,197,94,0.15); color: #86efac; }
+  .msg-err { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 500px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
+  .stat { background: var(--bg); border: 1px solid var(--brd); border-radius: 12px; padding: 16px; text-align: center; }
+  .stat .num { font-size: 28px; font-weight: 700; }
+  .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .empty { color: var(--muted); text-align: center; padding: 30px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <h1>📋 QR Yoklama — Admin</h1>
+  <a href="/admin/logout">Çıkış Yap</a>
+</nav>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('yoklama')">📊 Yoklama</button>
+  <button class="tab" onclick="showTab('personel')">👥 Personel</button>
+  <button class="tab" onclick="showTab('qr')">📱 QR Kodlar</button>
+  <button class="tab" onclick="showTab('konum')">📍 Konum Ayarı</button>
+</div>
+
+<!-- YOKLAMA TAB -->
+<div class="pane active" id="pane-yoklama">
+  <div class="stat-grid" id="statGrid"></div>
+
+  <div class="box">
+    <h2>Tarih Aralığı</h2>
+    <div class="row">
+      <input type="date" id="baslangic">
+      <input type="date" id="bitis">
+      <button class="btn btn-blue" onclick="loadYoklamalar()">Filtrele</button>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>Kayıtlar</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Tarih</th><th>Personel</th><th>Giriş</th><th>Çıkış</th><th>Süre</th><th>Durum</th></tr>
+        </thead>
+        <tbody id="yoklamaTbody"></tbody>
+      </table>
+      <div class="empty" id="yoklamaEmpty" style="display:none">Kayıt bulunamadı.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PERSONEL TAB -->
+<div class="pane" id="pane-personel">
+  <div class="box">
+    <h2>Yeni Personel Ekle</h2>
+    <div class="row">
+      <input type="text"     id="yeniAd"  placeholder="Ad Soyad">
+      <input type="password" id="yeniPin" placeholder="PIN (min 4 hane)" maxlength="6">
+      <button class="btn btn-green" onclick="personelEkle()">Ekle</button>
+    </div>
+    <div id="personelMsg"></div>
+  </div>
+
+  <div class="box">
+    <h2>Personel Listesi</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Ad Soyad</th><th>Durum</th><th>İşlemler</th></tr></thead>
+        <tbody id="personelTbody"></tbody>
+      </table>
+      <div class="empty" id="personelEmpty" style="display:none">Personel bulunamadı.</div>
+    </div>
+  </div>
+</div>
+
+<!-- QR TAB -->
+<div class="pane" id="pane-qr">
+  <div class="box">
+    <h2>QR Kodları</h2>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:20px;">
+      Bu QR kodlarını yazdırarak giriş ve çıkış noktalarına asın. Personel kendi telefonuyla tarayıp PIN girerek işlem yapabilir.
+    </p>
+    <div class="qr-grid" id="qrGrid">
+      <div class="qr-card" id="qrGiris">
+        <h3>🟢 Giriş QR</h3>
+        <div style="width:180px;height:180px;background:#1e293b;border-radius:8px;margin:0 auto;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">Yükleniyor...</div>
+        <div class="qr-url" id="girisUrl"></div>
+        <button class="btn btn-green" onclick="printQR('giris')">🖨️ Yazdır</button>
+      </div>
+      <div class="qr-card" id="qrCikis">
+        <h3>🔴 Çıkış QR</h3>
+        <div style="width:180px;height:180px;background:#1e293b;border-radius:8px;margin:0 auto;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">Yükleniyor...</div>
+        <div class="qr-url" id="cikisUrl"></div>
+        <button class="btn btn-red" onclick="printQR('cikis')">🖨️ Yazdır</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KONUM TAB -->
+<div class="pane" id="pane-konum">
+  <div class="box">
+    <h2>Klinik Konum Ayarı</h2>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:20px;">
+      Personelin QR ile giriş/çıkış yapabilmesi için bu koordinatlar içinde olması gerekir.
+      Yarıçapı çok küçük yaparsanız GPS hassasiyeti nedeniyle sorun yaşanabilir — <strong>100–150 m</strong> önerilen değerdir.
+    </p>
+
+    <div class="row" style="margin-bottom:6px;">
+      <div style="flex:1">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Enlem (Latitude)</label>
+        <input type="text" id="kLat" placeholder="40.983864">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Boylam (Longitude)</label>
+        <input type="text" id="kLng" placeholder="27.569552">
+      </div>
+      <div style="flex:0 0 140px">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Yarıçap (metre)</label>
+        <input type="text" id="kYaricap" placeholder="100">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-blue" onclick="konumKaydet()">💾 Kaydet</button>
+      <button class="btn" style="background:#334155;color:var(--text)" onclick="konumBenimKi()">📍 Şu Anki Konumumu Kullan</button>
+    </div>
+    <div id="konumMsg" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="box">
+    <h2>Harita Önizlemesi</h2>
+    <div id="mapPreview" style="width:100%;height:320px;border-radius:12px;overflow:hidden;background:#0f172a;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">
+      Koordinatları girin ve kaydedin
+    </div>
+  </div>
+</div>
+
+<!-- QR print area (hidden) -->
+<div id="printArea" style="display:none"></div>
+
+<script>
+// ── TAB ──────────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
+  const tabs = ["yoklama","personel","qr","konum"];
+  document.querySelectorAll(".tab")[tabs.indexOf(name)].classList.add("active");
+  document.getElementById("pane-" + name).classList.add("active");
+  if (name === "personel") loadPersonel();
+  if (name === "qr")      loadQR();
+  if (name === "konum")   loadKonum();
+}
+
+// ── YOKLAMA ───────────────────────────────────────────────────────────────────
+function today() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function timeDiff(t1, t2) {
+  if (!t1 || !t2) return "-";
+  const d1 = new Date("2000-01-01 " + t1);
+  const d2 = new Date("2000-01-01 " + t2);
+  const dk = Math.round((d2 - d1) / 60000);
+  if (dk < 0) return "-";
+  return `${Math.floor(dk/60)}s ${dk%60}dk`;
+}
+
+async function loadYoklamalar() {
+  const b = document.getElementById("baslangic").value || today();
+  const e = document.getElementById("bitis").value   || today();
+  const res  = await fetch(`/api/admin/yoklamalar?baslangic=${b}&bitis=${e}`);
+  const data = await res.json();
+
+  const tbody = document.getElementById("yoklamaTbody");
+  tbody.innerHTML = "";
+  document.getElementById("yoklamaEmpty").style.display = data.length ? "none" : "block";
+
+  let geldi = 0, gitmedi = 0, eksik = 0, uyariSayisi = 0;
+  data.forEach(r => {
+    const sure = timeDiff(r.giris_saati, r.cikis_saati);
+    let badge = "";
+    if (r.giris_saati && r.cikis_saati) { badge = `<span class="badge badge-green">Tam</span>`; geldi++; }
+    else if (r.giris_saati)              { badge = `<span class="badge badge-yellow">Çıkış yok</span>`; gitmedi++; }
+    else                                 { badge = `<span class="badge badge-red">Giriş yok</span>`; eksik++; }
+
+    const girisUyari = r.giris_uyari  ? ' <span title="Mesai saati dışında giriş" style="cursor:help">⚠️</span>' : '';
+    const cikisUyari = r.cikis_uyari  ? ' <span title="Mesai saati dışında çıkış" style="cursor:help">⚠️</span>' : '';
+    if (r.giris_uyari || r.cikis_uyari) uyariSayisi++;
+
+    tbody.innerHTML += `<tr>
+      <td>${r.tarih}</td>
+      <td>${r.ad_soyad}</td>
+      <td>${r.giris_saati ? r.giris_saati.slice(0,5) + girisUyari : '-'}</td>
+      <td>${r.cikis_saati ? r.cikis_saati.slice(0,5) + cikisUyari : '-'}</td>
+      <td>${sure}</td>
+      <td>${badge}</td>
+    </tr>`;
+  });
+
+  document.getElementById("statGrid").innerHTML = `
+    <div class="stat"><div class="num" style="color:var(--green)">${geldi}</div><div class="lbl">Tam Gün</div></div>
+    <div class="stat"><div class="num" style="color:#fde047">${gitmedi}</div><div class="lbl">Çıkış Yapmadı</div></div>
+    <div class="stat"><div class="num" style="color:var(--red)">${data.length}</div><div class="lbl">Toplam Kayıt</div></div>
+    <div class="stat"><div class="num" style="color:#fb923c">${uyariSayisi}</div><div class="lbl">⚠️ Mesai Dışı</div></div>
+  `;
+}
+
+// ── PERSONEL ──────────────────────────────────────────────────────────────────
+async function loadPersonel() {
+  const res  = await fetch("/api/admin/personeller");
+  const data = await res.json();
+  const tbody = document.getElementById("personelTbody");
+  tbody.innerHTML = "";
+  document.getElementById("personelEmpty").style.display = data.length ? "none" : "block";
+  data.forEach(p => {
+    tbody.innerHTML += `<tr>
+      <td>${p.ad_soyad}</td>
+      <td><span class="badge ${p.aktif ? 'badge-green':'badge-red'}">${p.aktif ? 'Aktif':'Pasif'}</span></td>
+      <td>
+        <button class="btn btn-blue btn-sm" onclick="pinDegistir(${p.id},'${p.ad_soyad}')">🔑 PIN</button>
+        ${p.aktif ? `<button class="btn btn-red btn-sm" onclick="personelSil(${p.id},'${p.ad_soyad}')">🗑️ Sil</button>` : ""}
+      </td>
+    </tr>`;
+  });
+}
+
+async function personelEkle() {
+  const ad  = document.getElementById("yeniAd").value.trim();
+  const pin = document.getElementById("yeniPin").value.trim();
+  const msg = document.getElementById("personelMsg");
+  if (!ad || !pin) { showMsg(msg, "Ad ve PIN zorunludur.", false); return; }
+  const res  = await fetch("/api/admin/personel_ekle", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ad_soyad: ad, pin})
+  });
+  const data = await res.json();
+  showMsg(msg, data.mesaj, data.ok);
+  if (data.ok) {
+    document.getElementById("yeniAd").value  = "";
+    document.getElementById("yeniPin").value = "";
+    loadPersonel();
+  }
+}
+
+async function personelSil(id, ad) {
+  if (!confirm(`"${ad}" personelini pasife almak istediğinize emin misiniz?`)) return;
+  await fetch(`/api/admin/personel_sil/${id}`, {method:"POST"});
+  loadPersonel();
+}
+
+async function pinDegistir(id, ad) {
+  const pin = prompt(`"${ad}" için yeni PIN (min 4 hane):`);
+  if (!pin) return;
+  const res  = await fetch(`/api/admin/pin_degistir/${id}`, {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({pin})
+  });
+  const data = await res.json();
+  alert(data.mesaj);
+}
+
+function showMsg(el, text, ok) {
+  el.innerHTML = `<div class="msg ${ok ? 'msg-ok':'msg-err'}">${text}</div>`;
+  setTimeout(() => { el.innerHTML = ""; }, 3000);
+}
+
+// ── QR ───────────────────────────────────────────────────────────────────────
+async function loadQR() {
+  const res  = await fetch("/api/admin/qr_urls");
+  const data = await res.json();
+
+  const g = data.giris_url;
+  const c = data.cikis_url;
+
+  document.getElementById("girisUrl").textContent = g;
+  document.getElementById("cikisUrl").textContent = c;
+
+  // QR via Google Charts API (no external JS needed)
+  document.getElementById("qrGiris").querySelector("div").outerHTML =
+    `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(g)}" alt="Giriş QR">`;
+  document.getElementById("qrCikis").querySelector("div").outerHTML =
+    `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(c)}" alt="Çıkış QR">`;
+}
+
+function printQR(type) {
+  const title = type === "giris" ? "🟢 GİRİŞ QR KODU" : "🔴 ÇIKIŞ QR KODU";
+  const url   = document.getElementById(type === "giris" ? "girisUrl" : "cikisUrl").textContent;
+  const w = window.open("", "_blank", "width=400,height=500");
+  w.document.write(`<!DOCTYPE html><html><head><title>QR</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 40px; }
+    h1 { font-size: 22px; margin-bottom: 20px; }
+    img { width: 220px; height: 220px; }
+    p { font-size: 12px; color: #666; margin-top: 14px; word-break: break-all; }
+    .inst { margin-top: 16px; font-size: 15px; color: #333; }
+  </style></head><body>
+  <h1>${title}</h1>
+  <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}">
+  <p>${url}</p>
+  <p class="inst">Telefonunuzla bu kodu tarayın ve PIN kodunuzu girin.</p>
+  <script>window.onload=()=>window.print()<\/script>
+  </body></html>`);
+}
+
+// ── KONUM ─────────────────────────────────────────────────────────────────────
+async function loadKonum() {
+  const res  = await fetch("/api/admin/konum_ayar");
+  const data = await res.json();
+  document.getElementById("kLat").value     = data.lat;
+  document.getElementById("kLng").value     = data.lng;
+  document.getElementById("kYaricap").value = data.yaricap;
+  updateMapPreview(data.lat, data.lng, data.yaricap);
+}
+
+async function konumKaydet() {
+  const lat     = parseFloat(document.getElementById("kLat").value);
+  const lng     = parseFloat(document.getElementById("kLng").value);
+  const yaricap = parseInt(document.getElementById("kYaricap").value);
+  const msg     = document.getElementById("konumMsg");
+
+  if (isNaN(lat) || isNaN(lng) || isNaN(yaricap)) {
+    showMsg(msg, "Lütfen tüm alanları doldurun.", false); return;
+  }
+  if (yaricap < 30 || yaricap > 1000) {
+    showMsg(msg, "Yarıçap 30–1000 metre arasında olmalıdır.", false); return;
+  }
+
+  const res  = await fetch("/api/admin/konum_ayar", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({lat, lng, yaricap})
+  });
+  const data = await res.json();
+  showMsg(msg, data.mesaj, data.ok);
+  if (data.ok) updateMapPreview(lat, lng, yaricap);
+}
+
+function konumBenimKi() {
+  if (!navigator.geolocation) { alert("Tarayıcınız konum desteklemiyor."); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      document.getElementById("kLat").value = pos.coords.latitude.toFixed(7);
+      document.getElementById("kLng").value = pos.coords.longitude.toFixed(7);
+      showMsg(document.getElementById("konumMsg"), `✅ Konum alındı (±${Math.round(pos.coords.accuracy)}m). Kaydetmeyi unutmayın!`, true);
+    },
+    () => showMsg(document.getElementById("konumMsg"), "Konum alınamadı. Tarayıcı iznini kontrol edin.", false)
+  );
+}
+
+function updateMapPreview(lat, lng, yaricap) {
+  // OpenStreetMap statik harita (ücretsiz, API key gerektirmez)
+  const zoom = yaricap <= 100 ? 18 : yaricap <= 300 ? 17 : 16;
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.005},${lat-0.004},${lng+0.005},${lat+0.004}&layer=mapnik&marker=${lat},${lng}`;
+  document.getElementById("mapPreview").innerHTML =
+    `<iframe src="${mapUrl}" style="width:100%;height:320px;border:none;" loading="lazy"></iframe>`;
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+document.getElementById("baslangic").value = today();
+document.getElementById("bitis").value     = today();
+loadYoklamalar();
+</script>
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>{% if islem == 'giris' %}Giriş{% else %}Çıkış{% endif %} - QR Yoklama</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:  #22c55e;
+    --red:    #ef4444;
+    --blue:   #3b82f6;
+    --bg:     #0f172a;
+    --card:   #1e293b;
+    --border: #334155;
+    --text:   #f1f5f9;
+    --muted:  #94a3b8;
+    --accent: {% if islem == 'giris' %}#22c55e{% else %}#ef4444{% endif %};
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px 32px;
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+  }
+
+  .icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 32px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  /* PIN dots */
+  .pin-dots {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .dot.filled {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: scale(1.1);
+  }
+
+  /* Numpad */
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .key {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 600;
+    padding: 18px;
+    cursor: pointer;
+    transition: all 0.1s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .key:active { transform: scale(0.93); background: var(--border); }
+  .key.del  { font-size: 18px; color: var(--muted); }
+  .key.empty { border: none; background: transparent; cursor: default; }
+
+  /* Submit button */
+  .btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:not(:disabled):active { transform: scale(0.97); }
+
+  /* Result toast */
+  .toast {
+    display: none;
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .toast.success { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+  .toast.error   { background: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+  .toast.warning { background: rgba(234,179,8,0.15);  color: #fde047; border: 1px solid rgba(234,179,8,0.35); }
+  .toast.show    { display: block; }
+
+  .time-display {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 20px;
+  }
+
+  /* Konum durum bandı */
+  .konum-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    transition: all 0.3s;
+  }
+  .konum-bar.bekle  { background: rgba(148,163,184,0.12); color: var(--muted); }
+  .konum-bar.tamam  { background: rgba(34,197,94,0.12);   color: #86efac; }
+  .konum-bar.hata   { background: rgba(239,68,68,0.12);   color: #fca5a5; }
+  .konum-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .konum-bar.tamam .konum-dot, .konum-bar.hata .konum-dot { animation: none; }
+  @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">
+    {% if islem == 'giris' %}🟢{% else %}🔴{% endif %}
+  </div>
+  <h1>{% if islem == 'giris' %}İşe Giriş{% else %}İşten Çıkış{% endif %}</h1>
+  <p class="subtitle">PIN kodunuzu girin</p>
+
+  <!-- Konum durum bandı -->
+  <div class="konum-bar bekle" id="konumBar">
+    <span class="konum-dot"></span>
+    <span id="konumText">Konum alınıyor...</span>
+  </div>
+
+  <!-- PIN dots -->
+  <div class="pin-dots" id="dots">
+    <div class="dot" id="d0"></div>
+    <div class="dot" id="d1"></div>
+    <div class="dot" id="d2"></div>
+    <div class="dot" id="d3"></div>
+    <div class="dot" id="d4"></div>
+    <div class="dot" id="d5"></div>
+  </div>
+
+  <!-- Numpad -->
+  <div class="numpad">
+    {% for n in [1,2,3,4,5,6,7,8,9] %}
+    <button class="key" onclick="press('{{n}}')">{{n}}</button>
+    {% endfor %}
+    <button class="key empty"></button>
+    <button class="key" onclick="press('0')">0</button>
+    <button class="key del" onclick="del()">⌫</button>
+  </div>
+
+  <button class="btn" id="submitBtn" disabled onclick="submit()">
+    {% if islem == 'giris' %}Giriş Yap{% else %}Çıkış Yap{% endif %}
+  </button>
+
+  <div class="toast" id="toast"></div>
+  <div class="toast" id="toastUyari"></div>
+  <div class="time-display" id="clock"></div>
+</div>
+
+<script>
+const ISLEM = "{{ islem }}";
+const API   = ISLEM === "giris" ? "/api/giris" : "/api/cikis";
+let pin = "";
+let konumLat = null, konumLng = null;
+
+// ── KONUM ────────────────────────────────────────────────────────────────────
+function setKonumBar(durum, text) {
+  const bar = document.getElementById("konumBar");
+  const txt = document.getElementById("konumText");
+  bar.className = "konum-bar " + durum;
+  txt.textContent = text;
+}
+
+function konumAl() {
+  if (!navigator.geolocation) {
+    setKonumBar("hata", "Tarayıcınız konum desteklemiyor");
+    return;
+  }
+  setKonumBar("bekle", "Konum alınıyor…");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      konumLat = pos.coords.latitude;
+      konumLng = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy);
+      setKonumBar("tamam", `📍 Konum alındı (±${acc}m)`);
+    },
+    err => {
+      konumLat = null; konumLng = null;
+      const msg = {
+        1: "Konum izni reddedildi — lütfen izin verin",
+        2: "Konum alınamadı — GPS sinyali yok",
+        3: "Konum zaman aşımı — tekrar deneniyor"
+      }[err.code] || "Konum hatası";
+      setKonumBar("hata", "❌ " + msg);
+      // Timeout durumunda otomatik tekrar dene
+      if (err.code === 3) setTimeout(konumAl, 3000);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+  );
+}
+
+// Sayfa açılır açılmaz konum al
+konumAl();
+
+// Her 60 saniyede bir konum yenile (ekranda açık kalanlarda güncel kalsın)
+setInterval(konumAl, 60000);
+
+// ── PIN ───────────────────────────────────────────────────────────────────────
+function updateDots() {
+  for (let i = 0; i < 6; i++) {
+    document.getElementById("d" + i).classList.toggle("filled", i < pin.length);
+  }
+  document.getElementById("submitBtn").disabled = pin.length < 4;
+}
+
+function press(d) {
+  if (pin.length >= 6) return;
+  pin += d;
+  updateDots();
+}
+
+function del() {
+  pin = pin.slice(0, -1);
+  updateDots();
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+function showToast(msg, ok) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className   = "toast show " + (ok ? "success" : "error");
+  setTimeout(() => { t.className = "toast"; }, 5000);
+}
+
+function showUyari(msg) {
+  const t = document.getElementById("toastUyari");
+  t.textContent = msg;
+  t.className   = "toast show warning";
+  setTimeout(() => { t.className = "toast"; }, 8000);
+}
+
+// ── SUBMIT ────────────────────────────────────────────────────────────────────
+async function submit() {
+  // Konum yoksa önce tekrar dene, kullanıcıyı bilgilendir
+  if (konumLat === null) {
+    showToast("📍 Konum henüz alınamadı. Lütfen konum iznini verin ve bekleyin.", false);
+    konumAl();
+    pin = ""; updateDots();
+    return;
+  }
+
+  const btn = document.getElementById("submitBtn");
+  btn.disabled    = true;
+  btn.textContent = "Bekleniyor…";
+
+  try {
+    const res  = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin, lat: konumLat, lng: konumLng })
+    });
+    const data = await res.json();
+    showToast(data.mesaj, data.ok);
+
+    if (data.ok && data.uyari && data.uyari_mesaj) {
+      setTimeout(() => showUyari(data.uyari_mesaj), 600);
+    }
+
+    // Konum hatası değilse PIN'i sıfırla
+    if (!data.konum_hatasi) {
+      pin = ""; updateDots();
+    }
+  } catch {
+    showToast("Sunucuya bağlanılamadı.", false);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = ISLEM === "giris" ? "Giriş Yap" : "Çıkış Yap";
+  }
+}
+
+// Klavye desteği
+document.addEventListener("keydown", e => {
+  if (e.key >= "0" && e.key <= "9") press(e.key);
+  if (e.key === "Backspace") del();
+  if (e.key === "Enter" && pin.length >= 4) submit();
+});
+
+// Saat göstergesi
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent =
+    now.toLocaleString("tr-TR", { dateStyle: "long", timeStyle: "short" });
+}
+updateClock();
+setInterval(updateClock, 10000);
+</script>
+</body>
+</html>
